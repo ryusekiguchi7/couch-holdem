@@ -66,7 +66,7 @@ export const CARD_BACKGROUND = {
 
 export const MAX_PLAYERS = 6
 /** 2〜6。レイアウト確認時は 6 に変更可 */
-export const DEFAULT_PLAYER_COUNT = 4
+export const DEFAULT_PLAYER_COUNT = 6
 export const STARTING_CHIPS = 100
 export const SMALL_BLIND = 10
 export const BIG_BLIND = 20

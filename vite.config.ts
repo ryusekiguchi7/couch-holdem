@@ -10,18 +10,20 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons.svg'],
+      includeAssets: ['favicon.svg', 'pwa-icon.svg'],
       manifest: {
-        name: "Texas Hold'em Poker",
-        short_name: 'Holdem',
+        name: "Couch Hold'em",
+        short_name: 'Couch Holdem',
         description: 'Mobile Texas Hold\'em poker vs AI',
-        theme_color: '#0a1f12',
-        background_color: '#050a08',
+        start_url: '.',
+        scope: '.',
+        theme_color: '#102f6f',
+        background_color: '#071022',
         display: 'standalone',
         orientation: 'portrait',
         icons: [
           {
-            src: '/icons.svg',
+            src: 'pwa-icon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any maskable',

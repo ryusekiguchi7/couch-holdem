@@ -66,7 +66,7 @@ export function ActionBar({
 
   return (
     <motion.div
-      className="sticky bottom-0 z-20 space-y-2 border-t border-border/60 bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md"
+      className="sticky bottom-0 z-20 space-y-1.5 border-t border-border/60 bg-background/95 px-3 pt-2 pb-[calc(max(1rem,env(safe-area-inset-bottom))+0.75rem)] backdrop-blur-md"
       initial={{ y: 80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 280, damping: 28, delay: 0.15 }}
@@ -77,7 +77,7 @@ export function ActionBar({
           size="lg"
           disabled={disabled || disableFold}
           onClick={onFold}
-          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+          className="h-10 min-h-10 border-destructive/50 text-destructive hover:bg-destructive/10"
         >
           Fold
         </Button>
@@ -86,6 +86,7 @@ export function ActionBar({
           size="lg"
           disabled={disabled}
           onClick={onCheck}
+          className="h-10 min-h-10"
         >
           {toCall > 0 ? `Call ${toCall}` : 'Check'}
         </Button>
@@ -97,7 +98,7 @@ export function ActionBar({
           size="default"
           disabled={!canBetOrRaise}
           onClick={() => submit()}
-          className="h-11 px-4 text-xs font-bold uppercase tracking-wide"
+          className="h-10 min-h-10 px-4 text-xs font-bold uppercase tracking-wide"
         >
           {isRaise ? 'Raise' : 'Bet'}
         </Button>
@@ -108,7 +109,7 @@ export function ActionBar({
           value={amount}
           disabled={!canBetOrRaise}
           onChange={(event) => setAmount(event.target.value)}
-          className="h-11 min-w-0 rounded-md border border-border bg-input px-3 text-center text-sm font-semibold tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring/50 disabled:opacity-50"
+          className="h-10 min-w-0 rounded-md border border-border bg-input px-3 text-center text-sm font-semibold tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring/50 disabled:opacity-50"
           aria-label={isRaise ? 'Raise amount' : 'Bet amount'}
         />
       </div>
@@ -122,6 +123,7 @@ export function ActionBar({
               size="sm"
               disabled={!canBetOrRaise}
               onClick={() => previewTarget(potTarget(percent))}
+              className="h-8 min-h-8 px-1 text-[11px]"
             >
               {Math.round(percent * 100)}%
             </Button>
@@ -131,6 +133,7 @@ export function ActionBar({
             size="sm"
             disabled={!canBetOrRaise}
             onClick={() => previewTarget(maxTarget)}
+            className="h-8 min-h-8 px-1 text-[11px]"
           >
             Max
           </Button>
@@ -144,6 +147,7 @@ export function ActionBar({
               size="sm"
               disabled={!canBetOrRaise}
               onClick={() => previewTarget(raiseTarget(multiplier))}
+              className="h-8 min-h-8 px-1 text-[11px]"
             >
               x{multiplier}
             </Button>
@@ -153,6 +157,7 @@ export function ActionBar({
             size="sm"
             disabled={!canBetOrRaise}
             onClick={() => previewTarget(maxTarget)}
+            className="h-8 min-h-8 px-1 text-[11px]"
           >
             Max
           </Button>
