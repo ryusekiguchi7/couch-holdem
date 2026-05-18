@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.625rem;
+    --background: 224 52% 7%;
+    --foreground: 213 30% 95%;
+    --card: 222 45% 11%;
+    --card-foreground: 213 30% 95%;
+    --popover: 224 48% 9%;
+    --popover-foreground: 213 30% 95%;
+    --primary: 206 92% 64%;
+    --primary-foreground: 224 60% 10%;
+    --secondary: 219 40% 16%;
+    --secondary-foreground: 213 28% 92%;
+    --muted: 219 34% 14%;
+    --muted-foreground: 213 18% 64%;
+    --accent: 211 80% 45%;
+    --accent-foreground: 213 30% 98%;
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 218 34% 22%;
+    --input: 219 36% 18%;
+    --ring: 206 92% 64%;
+    --felt: 215 58% 24%;
+    --felt-light: 207 72% 34%;
+    --gold: 206 92% 64%;
+    --gold-muted: 215 66% 44%;
+
+    /* トランプ表面背景（スート別・HSL）— ここで色を変更 */
+    --playing-card-face-hearts: 350 75% 92%;
+    --playing-card-face-clubs: 95 50% 88%;
+    --playing-card-face-diamonds: 195 70% 90%;
+    --playing-card-face-spades: 220 10% 86%;
+    --playing-card-face-border-hearts: 350 45% 78%;
+    --playing-card-face-border-clubs: 95 35% 72%;
+    --playing-card-face-border-diamonds: 195 45% 75%;
+    --playing-card-face-border-spades: 220 8% 72%;
+    /* 裏向きなどスート不明時 */
+    --playing-card-face: 40 10% 90%;
+    --playing-card-face-border: 40 8% 80%;
+    --playing-card-back-from: 224 54% 18%;
+    --playing-card-back-to: 213 72% 32%;
+    --playing-card-back-stripe-1: 220 44% 13%;
+    --playing-card-back-stripe-2: 206 92% 64%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground min-h-svh antialiased;
+    margin: 0;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+
+  #root {
+    @apply min-h-svh w-full max-w-lg mx-auto;
+  }
+}
+
+@layer utilities {
+  .night-city-bg {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 20% 12%, hsl(208 92% 62% / 0.22), transparent 30%),
+      radial-gradient(circle at 82% 18%, hsl(234 86% 66% / 0.18), transparent 28%),
+      linear-gradient(180deg, hsl(226 58% 8%) 0%, hsl(221 60% 7%) 52%, hsl(218 54% 5%) 100%);
+  }
+
+  .night-city-bg > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .night-city-bg::before {
+    content: '';
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .night-city-bg::before {
+    background-image:
+      radial-gradient(circle at 12% 18%, hsl(213 100% 88% / 0.7) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 18% 36%, hsl(213 100% 88% / 0.46) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 25% 6%, hsl(213 100% 88% / 0.56) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 34% 9%, hsl(213 100% 88% / 0.5) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 43% 28%, hsl(213 100% 88% / 0.38) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 57% 7%, hsl(213 100% 88% / 0.52) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 70% 15%, hsl(213 100% 88% / 0.58) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 76% 39%, hsl(213 100% 88% / 0.44) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 88% 31%, hsl(213 100% 88% / 0.42) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 93% 10%, hsl(213 100% 88% / 0.5) 0 1px, transparent 1.5px),
+      radial-gradient(ellipse at 50% 105%, hsl(208 94% 56% / 0.2), transparent 44%);
+    opacity: 0.85;
+  }
+
+  .felt-gradient {
+    background: radial-gradient(
+      ellipse 120% 80% at 50% 45%,
+      hsl(var(--felt-light)) 0%,
+      hsl(var(--felt)) 55%,
+      hsl(224 56% 12%) 100%
+    );
+  }
+
+  .table-rim {
+    box-shadow:
+      inset 0 0 0 3px hsl(var(--gold) / 0.35),
+      inset 0 0 40px hsl(0 0% 0% / 0.4),
+      0 8px 32px hsl(0 0% 0% / 0.5);
+  }
+
+  .card-back-checker {
+    background-color: hsl(var(--playing-card-back-stripe-1));
+    background-image:
+      radial-gradient(circle at 50% 50%, hsl(210 95% 74% / 0.24) 0 1px, transparent 1.5px),
+      repeating-linear-gradient(
+        45deg,
+        hsl(var(--playing-card-back-stripe-2) / 0.72) 0 4px,
+        transparent 4px 12px
+      ),
+      repeating-linear-gradient(
+        -45deg,
+        hsl(205 85% 58% / 0.45) 0 4px,
+        transparent 4px 12px
+      );
+    background-position:
+      0 0,
+      0 0,
+      6px 0;
+    background-size:
+      12px 12px,
+      18px 18px,
+      18px 18px;
+  }
+}
