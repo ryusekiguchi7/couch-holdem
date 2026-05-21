@@ -2,15 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Spade, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { DEFAULT_PLAYER_COUNT } from '@/game/constants'
+import { normalizeGameConfig, type GameConfig } from '@/game/gameConfig'
 import {
   actCurrentBot,
   advanceSkippedActions,
   betOrRaiseCurrentPlayer,
   checkCurrentPlayer,
   foldCurrentPlayer,
+  getPlayerHandLabel,
   startNextHand,
 } from '@/game/gameEngine'
+import {
+  getHandCompletionDisplayPercent,
+  getHandRankCompletionOdds,
+  type HandRankCompletionOdds,
+  type HandRankName,
+} from '@/game/handOdds'
+import { cn } from '@/lib/utils'
 import { createMockTable } from '@/game/mockTable'
 import { getSeatPositions } from '@/game/seatLayout'
 import type { Card, Rank, Suit, TableState } from '@/game/types'
@@ -20,14 +28,16 @@ import { CommunityCards } from './CommunityCards'
 import { PlayerSeat } from './PlayerSeat'
 import { PlayingCard } from './PlayingCard'
 import { PotDisplay } from './PotDisplay'
+import { SessionVictory } from './SessionVictory'
 
 interface PokerTableProps {
+  gameConfig: GameConfig
   onExit?: () => void
 }
 
-export function PokerTable({ onExit }: PokerTableProps) {
+export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
   const [table, setTable] = useState<TableState>(() =>
-    createMockTable(DEFAULT_PLAYER_COUNT),
+    createMockTable(normalizeGameConfig(gameConfig)),
   )
   const [isHandGuideOpen, setIsHandGuideOpen] = useState(false)
   const lastNotifiedTurnRef = useRef<string | null>(null)
@@ -47,6 +57,27 @@ export function PokerTable({ onExit }: PokerTableProps) {
     [table.activeSeatIndex, table.players],
   )
   const isShowdown = table.phase === 'showdown'
+  const sessionWinner = useMemo(() => {
+    const playersWithChips = table.players.filter((player) => player.chips > 0)
+    return playersWithChips.length === 1 ? playersWithChips[0] : null
+  }, [table.players])
+  const isSessionVictory = isShowdown && sessionWinner !== null
+  const humanToCall = Math.max(
+    0,
+    table.currentBet - (humanPlayer?.bet ?? 0),
+  )
+  const humanHandLabel = useMemo(() => {
+    if (!humanPlayer || isShowdown || humanPlayer.hasFolded) return undefined
+    return getPlayerHandLabel(humanPlayer, table.communityCards)
+  }, [humanPlayer, isShowdown, table.communityCards])
+
+  const handGuideOdds = useMemo(() => {
+    if (!isHandGuideOpen || !humanPlayer || humanPlayer.hasFolded) return undefined
+    return getHandRankCompletionOdds(
+      humanPlayer.holeCards,
+      table.communityCards,
+    )
+  }, [humanPlayer, isHandGuideOpen, table.communityCards])
 
   useEffect(() => {
     if (!activePlayer || activePlayer.isHuman || isShowdown) return
@@ -91,12 +122,16 @@ export function PokerTable({ onExit }: PokerTableProps) {
       return
     }
 
-    const humanWon = Boolean(humanPlayer && table.winnerIds.includes(humanPlayer.id))
+    const humanWon = Boolean(
+      humanPlayer &&
+        (table.winnerIds.includes(humanPlayer.id) ||
+          sessionWinner?.id === humanPlayer.id),
+    )
     if (!humanWon || hasPlayedWinSoundRef.current) return
 
     hasPlayedWinSoundRef.current = true
     playWinSound()
-  }, [humanPlayer, isShowdown, table.winnerIds])
+  }, [humanPlayer, isShowdown, sessionWinner, table.winnerIds])
 
   function handleCheck() {
     setTable((current) => checkCurrentPlayer(current))
@@ -116,7 +151,7 @@ export function PokerTable({ onExit }: PokerTableProps) {
 
   return (
     <motion.div
-      className="flex min-h-svh flex-col"
+      className="flex h-dvh overflow-hidden flex-col"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
@@ -126,9 +161,6 @@ export function PokerTable({ onExit }: PokerTableProps) {
           <h1 className="text-lg font-semibold tracking-tight text-foreground">
             Couch Hold&apos;em
           </h1>
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">
-            {table.players.length}/{6}
-          </span>
           <Button
             variant="outline"
             size="sm"
@@ -150,7 +182,7 @@ export function PokerTable({ onExit }: PokerTableProps) {
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 sm:px-3">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 sm:px-3">
         <div className="relative mx-auto grid w-full max-w-lg flex-1 place-items-center">
           {/* フェルト（楕円）は常に中央固定の背景扱い */}
           <div className="pointer-events-none absolute inset-0 z-0 grid place-items-center">
@@ -176,8 +208,6 @@ export function PokerTable({ onExit }: PokerTableProps) {
           {/* プレイヤーシート（2〜6） */}
           <div className="relative z-20 grid h-full min-h-[min(74svh,34rem)] w-full grid-cols-3 grid-rows-[auto_1fr_auto] gap-x-1 gap-y-2 py-1 sm:gap-x-2 sm:gap-y-3 sm:py-2">
             {table.players.map((player) => {
-              if (isShowdown && player.chips <= 0) return null
-
               const pos = seatPositions[player.seatIndex]
               if (!pos) return null
 
@@ -194,24 +224,38 @@ export function PokerTable({ onExit }: PokerTableProps) {
                 >
                   <PlayerSeat
                     player={player}
+                    handLabel={
+                      player.isHuman ? humanHandLabel : undefined
+                    }
                     showCards={
                       player.isHuman ||
                       (isShowdown && Boolean(table.winningHandLabel) && !player.hasFolded)
                     }
-                    isWinner={table.winnerIds.includes(player.id)}
+                    isWinner={
+                      table.winnerIds.includes(player.id) ||
+                      sessionWinner?.id === player.id
+                    }
                     onSwipeFold={
-                      player.isHuman && player.isActive ? handleFold : undefined
+                      player.isHuman && player.isActive && humanToCall > 0
+                        ? handleFold
+                        : undefined
                     }
                   />
                 </div>
               )
             })}
           </div>
+
+          <AnimatePresence>
+            {isSessionVictory && sessionWinner && (
+              <SessionVictory winner={sessionWinner} onExit={onExit} />
+            )}
+          </AnimatePresence>
         </div>
       </main>
 
-      {isShowdown && (
-        <div className="space-y-2 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center">
+      {isShowdown && !isSessionVictory && (
+        <div className="shrink-0 space-y-2 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center">
           <p className="text-sm font-semibold text-gold">{table.message}</p>
           <Button
             variant="casino"
@@ -227,6 +271,7 @@ export function PokerTable({ onExit }: PokerTableProps) {
       {!isShowdown && (
         <ActionBar
           disabled={!humanPlayer?.isActive || (humanPlayer?.chips ?? 0) <= 0}
+          disableFold={humanToCall === 0}
           pot={table.pot}
           currentBet={table.currentBet}
           minRaise={table.minRaise}
@@ -241,14 +286,22 @@ export function PokerTable({ onExit }: PokerTableProps) {
       <HandGuideOverlay
         open={isHandGuideOpen}
         onClose={() => setIsHandGuideOpen(false)}
+        completionOdds={handGuideOdds}
+        currentHandLabel={humanHandLabel as HandRankName | undefined}
       />
     </motion.div>
   )
 }
 
-const HAND_RANKINGS = [
+const HAND_RANKINGS: {
+  name: HandRankName
+  cards: Card[]
+  involvedCount: number
+  description: string
+}[] = [
   {
     name: 'Royal Flush',
+    involvedCount: 5,
     cards: handCards('royal', [
       ['A', 'spades'],
       ['K', 'spades'],
@@ -260,6 +313,7 @@ const HAND_RANKINGS = [
   },
   {
     name: 'Straight Flush',
+    involvedCount: 5,
     cards: handCards('straight-flush', [
       ['9', 'diamonds'],
       ['8', 'diamonds'],
@@ -271,6 +325,7 @@ const HAND_RANKINGS = [
   },
   {
     name: 'Four of a Kind',
+    involvedCount: 4,
     cards: handCards('four-kind', [
       ['A', 'spades'],
       ['A', 'hearts'],
@@ -282,6 +337,7 @@ const HAND_RANKINGS = [
   },
   {
     name: 'Full House',
+    involvedCount: 5,
     cards: handCards('full-house', [
       ['K', 'spades'],
       ['K', 'hearts'],
@@ -293,6 +349,7 @@ const HAND_RANKINGS = [
   },
   {
     name: 'Flush',
+    involvedCount: 5,
     cards: handCards('flush', [
       ['A', 'clubs'],
       ['J', 'clubs'],
@@ -304,6 +361,7 @@ const HAND_RANKINGS = [
   },
   {
     name: 'Straight',
+    involvedCount: 5,
     cards: handCards('straight', [
       ['T', 'spades'],
       ['9', 'hearts'],
@@ -315,6 +373,7 @@ const HAND_RANKINGS = [
   },
   {
     name: 'Three of a Kind',
+    involvedCount: 3,
     cards: handCards('three-kind', [
       ['Q', 'spades'],
       ['Q', 'hearts'],
@@ -326,6 +385,7 @@ const HAND_RANKINGS = [
   },
   {
     name: 'Two Pair',
+    involvedCount: 4,
     cards: handCards('two-pair', [
       ['J', 'spades'],
       ['J', 'hearts'],
@@ -337,6 +397,7 @@ const HAND_RANKINGS = [
   },
   {
     name: 'One Pair',
+    involvedCount: 2,
     cards: handCards('one-pair', [
       ['T', 'spades'],
       ['T', 'hearts'],
@@ -348,6 +409,7 @@ const HAND_RANKINGS = [
   },
   {
     name: 'High Card',
+    involvedCount: 1,
     cards: handCards('high-card', [
       ['A', 'spades'],
       ['Q', 'hearts'],
@@ -357,7 +419,7 @@ const HAND_RANKINGS = [
     ]),
     description: '役なし。高いカードで比較',
   },
-] as const
+]
 
 function handCards(handId: string, cards: [Rank, Suit][]): Card[] {
   return cards.map(([rank, suit], index) => ({
@@ -370,9 +432,13 @@ function handCards(handId: string, cards: [Rank, Suit][]): Card[] {
 function HandGuideOverlay({
   open,
   onClose,
+  completionOdds,
+  currentHandLabel,
 }: {
   open: boolean
   onClose: () => void
+  completionOdds?: HandRankCompletionOdds
+  currentHandLabel?: HandRankName
 }) {
   return (
     <AnimatePresence>
@@ -414,10 +480,23 @@ function HandGuideOverlay({
             </div>
 
             <div className="max-h-[64svh] space-y-2 overflow-y-auto p-3">
-              {HAND_RANKINGS.map((hand, index) => (
+              {HAND_RANKINGS.map((hand, index) => {
+                const percent = getHandCompletionDisplayPercent(
+                  hand.name,
+                  currentHandLabel,
+                  completionOdds,
+                )
+                const isCurrentHand = currentHandLabel === hand.name
+
+                return (
                 <div
                   key={hand.name}
-                  className="grid grid-cols-[1.5rem_1fr] gap-2 rounded-xl border border-border/60 bg-card/80 p-2.5"
+                  className={cn(
+                    'grid grid-cols-[1.5rem_1fr] gap-2 rounded-xl border p-2.5',
+                    isCurrentHand
+                      ? 'border-emerald-500/40 bg-emerald-500/10'
+                      : 'border-border/60 bg-card/80',
+                  )}
                 >
                   <div className="grid size-6 place-items-center rounded-full bg-gold/15 text-[10px] font-black text-gold">
                     {index + 1}
@@ -427,10 +506,20 @@ function HandGuideOverlay({
                       <h3 className="truncate text-sm font-bold text-foreground">
                         {hand.name}
                       </h3>
+                      {typeof percent === 'number' && (
+                        <span className="shrink-0 text-[10px] font-semibold tabular-nums text-emerald-300/90 sm:text-xs">
+                          完成 {percent}%
+                        </span>
+                      )}
                     </div>
                     <div className="mt-1 flex gap-1">
-                      {hand.cards.map((card) => (
-                        <PlayingCard key={card.id} card={card} size="mini" />
+                      {hand.cards.map((card, cardIndex) => (
+                        <PlayingCard
+                          key={card.id}
+                          card={card}
+                          size="mini"
+                          dimmed={cardIndex >= hand.involvedCount}
+                        />
                       ))}
                     </div>
                     <p className="mt-1.5 text-xs text-muted-foreground">
@@ -438,7 +527,7 @@ function HandGuideOverlay({
                     </p>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </motion.section>
         </motion.div>

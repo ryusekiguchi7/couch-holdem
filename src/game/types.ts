@@ -56,6 +56,13 @@ export interface PlayerState {
   handDelta?: number
 }
 
+export interface GameConfig {
+  playerCount: number
+  startingChips: number
+  smallBlind: number
+  bigBlind: number
+}
+
 export interface TableState {
   phase: GamePhase
   pot: number
@@ -71,4 +78,5 @@ export interface TableState {
   winnerIds: PlayerId[]
   winningHandLabel?: string
   message: string
+  config: GameConfig
 }

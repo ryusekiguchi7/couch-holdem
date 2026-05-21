@@ -53,18 +53,22 @@
 
   html {
     @apply scroll-smooth;
+    height: 100%;
+    overflow: hidden;
     -webkit-tap-highlight-color: transparent;
   }
 
   body {
-    @apply bg-background text-foreground min-h-svh antialiased;
+    @apply bg-background text-foreground antialiased;
+    height: 100%;
     margin: 0;
+    overflow: hidden;
     touch-action: manipulation;
     overscroll-behavior: none;
   }
 
   #root {
-    @apply min-h-svh w-full max-w-lg mx-auto;
+    @apply h-dvh w-full max-w-lg mx-auto overflow-hidden;
   }
 }
 

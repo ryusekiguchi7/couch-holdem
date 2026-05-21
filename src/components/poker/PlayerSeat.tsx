@@ -10,6 +10,7 @@ import { PlayingCard } from './PlayingCard'
 interface PlayerSeatProps {
   player: PlayerState
   showCards?: boolean
+  handLabel?: string
   isWinner?: boolean
   onSwipeFold?: () => void
 }
@@ -17,6 +18,7 @@ interface PlayerSeatProps {
 export function PlayerSeat({
   player,
   showCards = false,
+  handLabel,
   isWinner = false,
   onSwipeFold,
 }: PlayerSeatProps) {
@@ -85,7 +87,7 @@ export function PlayerSeat({
             : player.isActive
               ? 'border-gold/70 bg-gold/20 text-gold'
               : player.lastAction
-                ? 'border-blue-400/35 bg-blue-500/15 text-blue-100'
+                ? getActionDisplayClass(player.lastAction)
                 : 'border-transparent bg-transparent text-transparent shadow-none',
         )}
       >
@@ -111,7 +113,10 @@ export function PlayerSeat({
             {player.name}
           </span>
           {player.isDealer && (
-            <Badge variant="gold" className="px-1 py-0 text-[9px]">
+            <Badge
+              variant="outline"
+              className="border-red-500/45 bg-red-500/20 px-1 py-0 text-[9px] text-red-300"
+            >
               BTN
             </Badge>
           )}
@@ -143,9 +148,33 @@ export function PlayerSeat({
             <span className="text-gold">+{player.handDelta}</span>
           )}
         </div>
+
+        {handLabel && !player.hasFolded && (
+          <p className="max-w-full truncate text-center text-[9px] font-medium text-emerald-300/90 sm:text-[10px]">
+            {handLabel}
+          </p>
+        )}
       </div>
     </motion.div>
   )
+}
+
+function getActionDisplayClass(lastAction: string) {
+  const action = lastAction.toLowerCase()
+
+  if (action === 'fold') {
+    return 'border-blue-400/40 bg-blue-500/15 text-blue-300'
+  }
+
+  if (action === 'check' || action === 'call') {
+    return 'border-green-400/40 bg-green-500/15 text-green-300'
+  }
+
+  if (action === 'bet' || action === 'raise' || action === 'all-in') {
+    return 'border-red-400/40 bg-red-500/15 text-red-300'
+  }
+
+  return 'border-muted/60 bg-muted/40 text-muted-foreground'
 }
 
 function getActionText(player: PlayerState) {

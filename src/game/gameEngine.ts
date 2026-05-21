@@ -1,10 +1,5 @@
-import {
-  BIG_BLIND,
-  DEFAULT_PLAYER_COUNT,
-  MAX_PLAYERS,
-  SMALL_BLIND,
-  STARTING_CHIPS,
-} from './constants'
+import { MAX_PLAYERS } from './constants'
+import { normalizeGameConfig, type GameConfig } from './gameConfig'
 import type {
   Card,
   GamePhase,
@@ -56,13 +51,14 @@ interface SidePot {
 }
 
 export function createInitialTable(
-  playerCount: number = DEFAULT_PLAYER_COUNT,
+  configInput: Partial<GameConfig> = {},
   nextDealerSeatIndex?: number,
 ): TableState {
-  const count = clampPlayerCount(playerCount)
+  const config = normalizeGameConfig(configInput)
+  const count = clampPlayerCount(config.playerCount)
   const dealerSeatIndex = nextDealerSeatIndex ?? count - 1
   const deck = shuffleDeck(createDeck())
-  const players = createPlayers(count, dealerSeatIndex)
+  const players = createPlayers(count, dealerSeatIndex, config)
 
   dealHoleCards(players, deck, nextSeat(dealerSeatIndex, count))
 
@@ -74,7 +70,7 @@ export function createInitialTable(
     phase: 'preflop',
     pot: 0,
     currentBet: Math.max(...players.map((player) => player.bet)),
-    minRaise: BIG_BLIND,
+    minRaise: config.bigBlind,
     communityCards: [],
     players,
     deck,
@@ -84,9 +80,18 @@ export function createInitialTable(
     actionLog: [],
     winnerIds: [],
     message: '',
+    config,
   })
 
-  return table
+  return maybeFastForwardToShowdown(table)
+}
+
+export function getPlayerHandLabel(
+  player: PlayerState,
+  communityCards: Card[],
+): string | undefined {
+  if (player.hasFolded || player.holeCards.length < 2) return undefined
+  return evaluateBestHand([...player.holeCards, ...communityCards]).label
 }
 
 export function startNextHand(table: TableState): TableState {
@@ -98,7 +103,11 @@ export function startNextHand(table: TableState): TableState {
     table.dealerSeatIndex,
   )
   const deck = shuffleDeck(createDeck())
-  const players = resetPlayersForNextHand(remainingPlayers, dealerSeatIndex)
+  const players = resetPlayersForNextHand(
+    remainingPlayers,
+    dealerSeatIndex,
+    table.config,
+  )
 
   dealHoleCards(players, deck, nextSeat(dealerSeatIndex, count))
 
@@ -110,7 +119,7 @@ export function startNextHand(table: TableState): TableState {
     phase: 'preflop',
     pot: 0,
     currentBet: Math.max(0, ...players.map((player) => player.bet)),
-    minRaise: BIG_BLIND,
+    minRaise: table.config.bigBlind,
     communityCards: [],
     players,
     deck,
@@ -120,9 +129,10 @@ export function startNextHand(table: TableState): TableState {
     actionLog: [],
     winnerIds: [],
     message: '',
+    config: table.config,
   })
 
-  return nextTable
+  return maybeFastForwardToShowdown(nextTable)
 }
 
 export function checkCurrentPlayer(table: TableState): TableState {
@@ -175,6 +185,10 @@ export function foldCurrentPlayer(table: TableState): TableState {
   if (!activePlayer) return table
   if (!canAct(activePlayer)) {
     return skipPlayerAction(table, activePlayer)
+  }
+
+  if (amountToCall(table, activePlayer) === 0) {
+    return table
   }
 
   return foldPlayer(table, activePlayer)
@@ -370,11 +384,15 @@ function recordCheck(table: TableState, player: PlayerState): TableState {
 function recordCall(table: TableState, player: PlayerState): TableState {
   const toCall = amountToCall(table, player)
   const amount = Math.min(toCall, player.chips)
-  const players = commitChips(table.players, player.id, amount).map((candidate) =>
-    candidate.id === player.id
-      ? { ...candidate, lastAction: 'Call', actionAmount: amount }
-      : candidate,
-  )
+  const players = commitChips(table.players, player.id, amount).map((candidate) => {
+    if (candidate.id !== player.id) return candidate
+    const { lastAction, actionAmount } = actionLabelAfterCommit(
+      candidate,
+      'Call',
+      amount,
+    )
+    return { ...candidate, lastAction, actionAmount }
+  })
   const nextTable = {
     ...table,
     players,
@@ -415,11 +433,15 @@ function recordBetOrRaise(
   const action = table.currentBet === 0 ? 'Bet' : 'Raise'
   const nextTable = {
     ...table,
-    players: players.map((candidate) =>
-      candidate.id === player.id
-        ? { ...candidate, lastAction: action, actionAmount: targetBet }
-        : candidate,
-    ),
+    players: players.map((candidate) => {
+      if (candidate.id !== player.id) return candidate
+      const { lastAction, actionAmount } = actionLabelAfterCommit(
+        candidate,
+        action,
+        targetBet,
+      )
+      return { ...candidate, lastAction, actionAmount }
+    }),
     currentBet: targetBet,
     minRaise: raiseSize,
     checkedSeatIndexes: [player.seatIndex],
@@ -461,15 +483,11 @@ function advanceStreet(table: TableState): TableState {
     players: table.players.map((player) => ({
       ...player,
       bet: 0,
-      lastAction:
-        player.hasFolded || player.chips === 0
-          ? (player.lastAction ?? (player.hasFolded ? 'Fold' : 'All-in'))
-          : undefined,
-      actionAmount:
-        player.hasFolded || player.chips === 0 ? player.actionAmount : undefined,
+      lastAction: player.lastAction === 'Fold' ? 'Fold' : undefined,
+      actionAmount: player.lastAction === 'Fold' ? player.actionAmount : undefined,
     })),
     currentBet: 0,
-    minRaise: BIG_BLIND,
+    minRaise: table.config.bigBlind,
     checkedSeatIndexes: [],
     activeSeatIndex: findFirstActionableSeat(
       table.players,
@@ -519,7 +537,7 @@ function resolveShowdown(table: TableState): TableState {
   }
 }
 
-function evaluateBestHand(cards: Card[]): HandResult {
+export function evaluateBestHand(cards: Card[]): HandResult {
   const values = cards
     .map((card) => RANK_VALUE[card.rank])
     .sort((a, b) => b - a)
@@ -612,18 +630,22 @@ function evaluateBestHand(cards: Card[]): HandResult {
   return { label: 'High Card', score: [0, ...uniqueValues.slice(0, 5)] }
 }
 
-function createPlayers(count: number, dealerSeatIndex: number): PlayerState[] {
+function createPlayers(
+  count: number,
+  dealerSeatIndex: number,
+  config: GameConfig,
+): PlayerState[] {
   return Array.from({ length: count }, (_, seatIndex) => {
     const isHuman = seatIndex === 0
     const blind = getBlindForSeat(seatIndex, count, dealerSeatIndex)
     const position = getTablePositionForSeat(seatIndex, count, dealerSeatIndex)
-    const bet = getBlindBet(blind)
+    const bet = getBlindBet(blind, config)
 
     return {
       id: `player-${seatIndex}`,
       seatIndex,
       name: isHuman ? 'You' : AI_NAMES[seatIndex] ?? `Player ${seatIndex + 1}`,
-      chips: STARTING_CHIPS - bet,
+      chips: config.startingChips - bet,
       bet,
       committed: bet,
       holeCards: [],
@@ -633,7 +655,7 @@ function createPlayers(count: number, dealerSeatIndex: number): PlayerState[] {
       isActive: false,
       hasFolded: false,
       isHuman,
-      lastAction: bet > 0 ? (bet === BIG_BLIND ? 'Big Blind' : 'Small Blind') : undefined,
+      lastAction: getBlindActionLabel(blind),
       actionAmount: bet > 0 ? bet : undefined,
     }
   })
@@ -642,6 +664,7 @@ function createPlayers(count: number, dealerSeatIndex: number): PlayerState[] {
 function resetPlayersForNextHand(
   previousPlayers: PlayerState[],
   dealerSeatIndex: number,
+  config: GameConfig,
 ): PlayerState[] {
   const count = previousPlayers.length
 
@@ -652,7 +675,7 @@ function resetPlayersForNextHand(
       count,
       dealerSeatIndex,
     )
-    const blindAmount = Math.min(player.chips, getBlindBet(blind))
+    const blindAmount = Math.min(player.chips, getBlindBet(blind, config))
     return {
       ...player,
       chips: player.chips - blindAmount,
@@ -665,11 +688,7 @@ function resetPlayersForNextHand(
       isActive: false,
       hasFolded: player.chips <= 0,
       lastAction:
-        blindAmount > 0
-          ? blindAmount === BIG_BLIND
-            ? 'Big Blind'
-            : 'Small Blind'
-          : undefined,
+        blindAmount > 0 ? getBlindActionLabel(blind) : undefined,
       actionAmount: blindAmount > 0 ? blindAmount : undefined,
       handDelta: undefined,
     }
@@ -785,10 +804,16 @@ function getTablePositionForSeat(
   return undefined
 }
 
-function getBlindBet(blind: PlayerState['blind']) {
-  if (blind === 'small') return SMALL_BLIND
-  if (blind === 'big') return BIG_BLIND
+function getBlindBet(blind: PlayerState['blind'], config: GameConfig) {
+  if (blind === 'small') return config.smallBlind
+  if (blind === 'big') return config.bigBlind
   return 0
+}
+
+function getBlindActionLabel(blind: PlayerState['blind']) {
+  if (blind === 'big') return 'Big Blind'
+  if (blind === 'small') return 'Small Blind'
+  return undefined
 }
 
 function nextPhaseAfter(phase: GamePhase): GamePhase {
@@ -887,6 +912,40 @@ function amountToCall(table: TableState, player: PlayerState) {
 
 function collectCurrentBets(table: TableState) {
   return table.pot + table.players.reduce((sum, player) => sum + player.bet, 0)
+}
+
+function actionLabelAfterCommit(
+  player: PlayerState,
+  action: string,
+  actionAmount?: number,
+): Pick<PlayerState, 'lastAction' | 'actionAmount'> {
+  if (player.chips === 0) {
+    return { lastAction: 'All-in', actionAmount }
+  }
+
+  return { lastAction: action, actionAmount }
+}
+
+function shouldFastForwardToShowdown(table: TableState): boolean {
+  if (table.players.length < 3) return false
+  if (activePlayers(table).length < 2) return false
+
+  const playersWithStack = table.players.filter((player) => player.chips > 0).length
+  return playersWithStack <= 1
+}
+
+function fastForwardToShowdown(table: TableState): TableState {
+  let current = table
+  while (current.phase !== 'showdown') {
+    current = advanceStreet(current)
+  }
+  return current
+}
+
+function maybeFastForwardToShowdown(table: TableState): TableState {
+  return shouldFastForwardToShowdown(table)
+    ? fastForwardToShowdown(table)
+    : table
 }
 
 function commitChips(
@@ -1069,7 +1128,7 @@ function isBettingRoundComplete(table: TableState) {
 
 function getMinimumTargetBet(table: TableState, player: PlayerState) {
   if (table.currentBet === 0) {
-    return Math.min(player.bet + player.chips, BIG_BLIND)
+    return Math.min(player.bet + player.chips, table.config.bigBlind)
   }
 
   return Math.min(
@@ -1121,7 +1180,7 @@ function decideBotAction(table: TableState, player: PlayerState): BotDecision {
       : { action: 'fold' }
   }
 
-  const canBet = player.chips >= BIG_BLIND
+  const canBet = player.chips >= table.config.bigBlind
   const bluffChance = table.phase === 'river' ? 0.03 : 0.06
   const betChance = clamp(aggression + bluffChance, 0.03, 0.42)
 
@@ -1155,7 +1214,7 @@ function botOpenBetTarget(
   strength: number,
 ) {
   const percent = strength > 0.75 ? 0.75 : strength > 0.55 ? 0.5 : 0.33
-  const target = Math.max(BIG_BLIND, Math.round(table.pot * percent))
+  const target = Math.max(table.config.bigBlind, Math.round(table.pot * percent))
   return Math.min(player.bet + player.chips, target)
 }
 
@@ -1252,7 +1311,7 @@ function topValues(values: number[], count: number, exclude: number[] = []) {
   return values.filter((value) => !exclude.includes(value)).slice(0, count)
 }
 
-function compareScores(a: number[], b: number[]) {
+export function compareScores(a: number[], b: number[]) {
   const length = Math.max(a.length, b.length)
   for (let i = 0; i < length; i += 1) {
     const diff = (a[i] ?? 0) - (b[i] ?? 0)

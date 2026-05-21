@@ -66,39 +66,18 @@ export function ActionBar({
 
   return (
     <motion.div
-      className="sticky bottom-0 z-20 space-y-1.5 border-t border-border/60 bg-background/95 px-3 pt-2 pb-[calc(max(1rem,env(safe-area-inset-bottom))+0.75rem)] backdrop-blur-md"
+      className="z-20 shrink-0 space-y-1.5 border-t border-border/60 bg-background/95 px-3 pt-2 pb-[calc(max(0.5rem,env(safe-area-inset-bottom))+0.35rem)] backdrop-blur-md"
       initial={{ y: 80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 280, damping: 28, delay: 0.15 }}
     >
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          variant="outline"
-          size="lg"
-          disabled={disabled || disableFold}
-          onClick={onFold}
-          className="h-10 min-h-10 border-destructive/50 text-destructive hover:bg-destructive/10"
-        >
-          Fold
-        </Button>
-        <Button
-          variant="secondary"
-          size="lg"
-          disabled={disabled}
-          onClick={onCheck}
-          className="h-10 min-h-10"
-        >
-          {toCall > 0 ? `Call ${toCall}` : 'Check'}
-        </Button>
-      </div>
-
       <div className="grid grid-cols-[7fr_3fr] gap-2">
         <Button
-          variant="casino"
+          variant="outline"
           size="default"
           disabled={!canBetOrRaise}
           onClick={() => submit()}
-          className="h-10 min-h-10 px-4 text-xs font-bold uppercase tracking-wide"
+          className="h-10 min-h-10 border-red-500/50 bg-red-500/20 px-4 text-xs font-bold uppercase tracking-wide text-red-200 hover:bg-red-500/30 hover:text-red-100"
         >
           {isRaise ? 'Raise' : 'Bet'}
         </Button>
@@ -109,7 +88,7 @@ export function ActionBar({
           value={amount}
           disabled={!canBetOrRaise}
           onChange={(event) => setAmount(event.target.value)}
-          className="h-10 min-w-0 rounded-md border border-border bg-input px-3 text-center text-sm font-semibold tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring/50 disabled:opacity-50"
+          className="h-10 min-w-0 rounded-md border border-border bg-input px-3 text-center text-sm font-semibold tabular-nums text-red-300 outline-none focus:ring-2 focus:ring-ring/50 disabled:opacity-50"
           aria-label={isRaise ? 'Raise amount' : 'Bet amount'}
         />
       </div>
@@ -123,7 +102,7 @@ export function ActionBar({
               size="sm"
               disabled={!canBetOrRaise}
               onClick={() => previewTarget(potTarget(percent))}
-              className="h-8 min-h-8 px-1 text-[11px]"
+              className="h-8 min-h-8 px-1 text-[11px] text-red-300"
             >
               {Math.round(percent * 100)}%
             </Button>
@@ -133,7 +112,7 @@ export function ActionBar({
             size="sm"
             disabled={!canBetOrRaise}
             onClick={() => previewTarget(maxTarget)}
-            className="h-8 min-h-8 px-1 text-[11px]"
+            className="h-8 min-h-8 px-1 text-[11px] text-red-300"
           >
             Max
           </Button>
@@ -147,7 +126,7 @@ export function ActionBar({
               size="sm"
               disabled={!canBetOrRaise}
               onClick={() => previewTarget(raiseTarget(multiplier))}
-              className="h-8 min-h-8 px-1 text-[11px]"
+              className="h-8 min-h-8 px-1 text-[11px] text-red-300"
             >
               x{multiplier}
             </Button>
@@ -157,12 +136,33 @@ export function ActionBar({
             size="sm"
             disabled={!canBetOrRaise}
             onClick={() => previewTarget(maxTarget)}
-            className="h-8 min-h-8 px-1 text-[11px]"
+            className="h-8 min-h-8 px-1 text-[11px] text-red-300"
           >
             Max
           </Button>
         </div>
       )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          size="lg"
+          disabled={disabled || disableFold}
+          onClick={onFold}
+          className="h-10 min-h-10 border-blue-500/50 text-blue-300 hover:bg-blue-500/15 hover:text-blue-200"
+        >
+          Fold
+        </Button>
+        <Button
+          variant="outline"
+          size="lg"
+          disabled={disabled}
+          onClick={onCheck}
+          className="h-10 min-h-10 border-green-500/50 bg-green-500/15 text-green-300 hover:bg-green-500/25 hover:text-green-200"
+        >
+          {toCall > 0 ? `Call ${toCall}` : 'Check'}
+        </Button>
+      </div>
     </motion.div>
   )
 }

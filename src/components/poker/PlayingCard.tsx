@@ -69,7 +69,8 @@ export function PlayingCard({
           ? 'h-9 w-6'
           : 'h-[clamp(3.45rem,13svw,5rem)] w-[clamp(2.45rem,9.4svw,3.5rem)]',
         '[perspective:800px]',
-        dimmed && 'opacity-45 grayscale brightness-50',
+        dimmed &&
+          'opacity-55 saturate-[0.35] brightness-[0.42] contrast-[0.85]',
         className,
       )}
       style={{ transformStyle: 'preserve-3d' }}
