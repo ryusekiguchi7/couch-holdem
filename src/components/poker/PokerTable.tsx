@@ -521,50 +521,57 @@ function HandGuideDrawer({
         )}
       </AnimatePresence>
 
-      <motion.div
-        className="fixed right-0 top-0 z-50 flex h-dvh"
-        initial={false}
-        animate={{
-          x: open ? 0 : `calc(100% - ${HAND_GUIDE_TAB_WIDTH_PX}px)`,
+      <div
+        className="pointer-events-none fixed right-0 z-50 flex items-center justify-end max-lg:right-0 lg:right-[max(0px,calc((100vw-32rem)/2))]"
+        style={{
+          top: 'max(5.5rem, 24%)',
+          bottom: 'max(11rem, 34%)',
         }}
-        transition={{ type: 'spring', stiffness: 320, damping: 34 }}
       >
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-controls="hand-guide-panel"
-          className={cn(
-            'flex w-10 shrink-0 flex-col items-center justify-center gap-1.5',
-            'rounded-l-xl border border-r-0 border-gold/35 bg-card/95 shadow-lg shadow-black/40',
-            'text-gold transition-colors hover:bg-gold/10',
-          )}
-          style={{ width: HAND_GUIDE_TAB_WIDTH_PX }}
+        <motion.div
+          className="pointer-events-auto flex max-h-full items-center"
+          initial={false}
+          animate={{
+            x: open ? 0 : `calc(100% - ${HAND_GUIDE_TAB_WIDTH_PX}px)`,
+          }}
+          transition={{ type: 'spring', stiffness: 320, damping: 34 }}
         >
-          <ChevronLeft
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-controls="hand-guide-panel"
             className={cn(
-              'size-4 shrink-0 transition-transform',
-              open && 'rotate-180',
+              'flex h-24 w-10 shrink-0 flex-col items-center justify-center gap-1',
+              'rounded-l-xl border border-r-0 border-gold/35 bg-card/95 shadow-lg shadow-black/40',
+              'text-gold transition-colors hover:bg-gold/10',
             )}
-            aria-hidden
-          />
-          <span
-            className="text-[10px] font-bold uppercase tracking-[0.22em]"
-            style={{ writingMode: 'vertical-rl' }}
+            style={{ width: HAND_GUIDE_TAB_WIDTH_PX }}
           >
-            Hands
-          </span>
-        </button>
+            <ChevronLeft
+              className={cn(
+                'size-4 shrink-0 transition-transform',
+                open && 'rotate-180',
+              )}
+              aria-hidden
+            />
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.22em]"
+              style={{ writingMode: 'vertical-rl' }}
+            >
+              Hands
+            </span>
+          </button>
 
-        <section
-          id="hand-guide-panel"
-          className={cn(
-            HAND_GUIDE_PANEL_CLASS,
-            'flex flex-col overflow-hidden border-l border-gold/25 bg-background/98 shadow-2xl shadow-black/60',
-            !open && 'pointer-events-none invisible',
-          )}
-          aria-hidden={!open}
-        >
+          <section
+            id="hand-guide-panel"
+            className={cn(
+              HAND_GUIDE_PANEL_CLASS,
+              'flex max-h-full flex-col overflow-hidden border-l border-gold/25 bg-background/98 shadow-2xl shadow-black/60',
+              !open && 'pointer-events-none invisible',
+            )}
+            aria-hidden={!open}
+          >
           <div className="flex shrink-0 items-center justify-between border-b border-border/70 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-gold/80">
@@ -634,7 +641,8 @@ function HandGuideDrawer({
               )})}
           </div>
         </section>
-      </motion.div>
+        </motion.div>
+      </div>
     </>
   )
 }

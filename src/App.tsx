@@ -19,6 +19,8 @@ import {
   startingChipsFromStackBb,
   type GameConfig,
 } from '@/game/gameConfig'
+import { usePwaUpdate } from '@/hooks/usePwaUpdate'
+import { APP_VERSION } from '@/version'
 
 const PLAYER_COUNT_OPTIONS = Array.from(
   { length: MAX_PLAYERS - MIN_PLAYERS + 1 },
@@ -47,6 +49,7 @@ function setupToGameConfig(draft: SetupDraft): GameConfig {
 function App() {
   const [gameConfig, setGameConfig] = useState<GameConfig | null>(null)
   const [draft, setDraft] = useState<SetupDraft>(DEFAULT_SETUP)
+  const { needRefresh, isUpdating, applyUpdate, refreshAssets } = usePwaUpdate()
 
   if (gameConfig) {
     return (
@@ -134,6 +137,26 @@ function App() {
             </label>
           </div>
 
+          {needRefresh && (
+            <div className="mt-4 w-full rounded-xl border border-gold/35 bg-gold/10 px-4 py-3 text-left">
+              <p className="text-xs font-semibold text-gold">
+                新しいバージョンがあります
+              </p>
+              <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                アイコンや画面の見た目を含む最新の資産を適用します。
+              </p>
+              <Button
+                type="button"
+                variant="casino"
+                className="mt-3 h-9 w-full text-xs font-bold uppercase tracking-wider"
+                disabled={isUpdating}
+                onClick={() => void applyUpdate()}
+              >
+                {isUpdating ? '更新中…' : '更新を適用'}
+              </Button>
+            </div>
+          )}
+
           <Button
             className="mt-6 h-12 rounded-full px-8 text-sm font-bold uppercase tracking-[0.2em] shadow-lg shadow-black/30"
             variant="casino"
@@ -141,6 +164,20 @@ function App() {
           >
             Shuffle Up and Deal
           </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            className="mt-2 h-9 text-[11px] text-muted-foreground hover:text-foreground"
+            disabled={isUpdating}
+            onClick={() => void refreshAssets()}
+          >
+            {isUpdating ? '確認中…' : '最新版を確認'}
+          </Button>
+
+          <p className="mt-3 text-[10px] font-medium tabular-nums tracking-wider text-muted-foreground/75">
+            v{APP_VERSION}
+          </p>
         </motion.section>
       </main>
     </div>

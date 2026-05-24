@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="Couch Hold'em">
+  <defs>
+    <linearGradient id="night-sky" x1="90" y1="0" x2="90" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a2f4f" />
+      <stop offset="52%" stop-color="#101c31" />
+      <stop offset="100%" stop-color="#0a101c" />
+    </linearGradient>
+    <radialGradient id="city-glow" cx="90" cy="28" r="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5eb8f0" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#5eb8f0" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="felt" cx="90" cy="102" rx="62" ry="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3a7ec4" />
+      <stop offset="58%" stop-color="#245a8f" />
+      <stop offset="100%" stop-color="#173a5f" />
+    </radialGradient>
+    <linearGradient id="accent" x1="56" y1="42" x2="124" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8fe0ff" />
+      <stop offset="100%" stop-color="#4eb3f2" />
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="40" fill="url(#night-sky)" />
+  <rect width="180" height="180" rx="40" fill="url(#city-glow)" />
+  <ellipse cx="90" cy="102" rx="62" ry="36" fill="url(#felt)" />
+  <ellipse
+    cx="90"
+    cy="102"
+    rx="62"
+    ry="36"
+    fill="none"
+    stroke="#6ec4ff"
+    stroke-opacity="0.4"
+    stroke-width="3.5"
+  />
+  <path
+    fill="url(#accent)"
+    d="M90 42c-15.8 19.4-37.7 32.9-37.7 57.1 0 14.3 11 25.6 25.1 25.6 6.1 0 11.6-2.2 15.8-5.9-2.5 8.6-7.3 15.7-15.8 19.9V144h25.9v-4.5c-8.4-4.2-13.5-11.2-15.8-19.9 4.2 3.7 9.7 5.9 15.8 5.9 14.1 0 25.1-11.3 25.1-25.6C127.7 74.9 105.8 61.4 90 42Z"
+  />
+</svg>
