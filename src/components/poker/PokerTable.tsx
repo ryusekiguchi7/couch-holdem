@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Spade, X } from 'lucide-react'
+import { ChevronLeft, Spade, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  formatBlindLevelLabel,
+  getHandsUntilNextBlindLevel,
+} from '@/game/blindStructure'
 import { normalizeGameConfig, type GameConfig } from '@/game/gameConfig'
 import {
   actCurrentBot,
@@ -40,6 +44,8 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
     createMockTable(normalizeGameConfig(gameConfig)),
   )
   const [isHandGuideOpen, setIsHandGuideOpen] = useState(false)
+  const [queuedFold, setQueuedFold] = useState(false)
+  const [showStackInBb, setShowStackInBb] = useState(false)
   const lastNotifiedTurnRef = useRef<string | null>(null)
   const hasPlayedWinSoundRef = useRef(false)
 
@@ -66,10 +72,36 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
     0,
     table.currentBet - (humanPlayer?.bet ?? 0),
   )
+  const isHumanTurn = Boolean(
+    humanPlayer?.isActive && !humanPlayer.hasFolded && (humanPlayer.chips ?? 0) > 0,
+  )
+  const canQueueFold = Boolean(
+    humanPlayer &&
+      !humanPlayer.hasFolded &&
+      !isShowdown &&
+      !humanPlayer.isActive &&
+      humanPlayer.chips > 0 &&
+      !queuedFold,
+  )
+  const canCancelQueuedFold = Boolean(
+    humanPlayer &&
+      !humanPlayer.hasFolded &&
+      !isShowdown &&
+      !humanPlayer.isActive &&
+      humanPlayer.chips > 0 &&
+      queuedFold,
+  )
   const humanHandLabel = useMemo(() => {
     if (!humanPlayer || isShowdown || humanPlayer.hasFolded) return undefined
     return getPlayerHandLabel(humanPlayer, table.communityCards)
   }, [humanPlayer, isShowdown, table.communityCards])
+
+  const blindSubLabel = useMemo(() => {
+    const remaining = getHandsUntilNextBlindLevel(table)
+    if (remaining === null) return 'Final blind level'
+    if (remaining === 0) return 'Level up next hand'
+    return `Level up in ${remaining} hand${remaining === 1 ? '' : 's'}`
+  }, [table])
 
   const handGuideOdds = useMemo(() => {
     if (!isHandGuideOpen || !humanPlayer || humanPlayer.hasFolded) return undefined
@@ -117,6 +149,23 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
   }, [activePlayer, isShowdown, table.activeSeatIndex, table.currentBet, table.phase])
 
   useEffect(() => {
+    if (!queuedFold || !isHumanTurn || isShowdown) return
+
+    setQueuedFold(false)
+    setTable((current) => foldCurrentPlayer(current))
+  }, [queuedFold, isHumanTurn, isShowdown, table.activeSeatIndex, table.phase])
+
+  useEffect(() => {
+    if (isShowdown || humanPlayer?.hasFolded) {
+      setQueuedFold(false)
+    }
+  }, [humanPlayer?.hasFolded, isShowdown])
+
+  useEffect(() => {
+    setQueuedFold(false)
+  }, [humanPlayer?.holeCards[0]?.id, humanPlayer?.holeCards[1]?.id])
+
+  useEffect(() => {
     if (!isShowdown) {
       hasPlayedWinSoundRef.current = false
       return
@@ -138,7 +187,20 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
   }
 
   function handleFold() {
-    setTable((current) => foldCurrentPlayer(current))
+    if (isHumanTurn) {
+      setQueuedFold(false)
+      setTable((current) => foldCurrentPlayer(current))
+      return
+    }
+
+    if (canCancelQueuedFold) {
+      setQueuedFold(false)
+      return
+    }
+
+    if (canQueueFold) {
+      setQueuedFold(true)
+    }
   }
 
   function handleBet(targetBet: number) {
@@ -161,14 +223,6 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
           <h1 className="text-lg font-semibold tracking-tight text-foreground">
             Couch Hold&apos;em
           </h1>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 min-h-8 rounded-full border-gold/30 bg-card/80 px-2.5 text-[10px] font-bold uppercase tracking-[0.14em] text-gold hover:bg-gold/10"
-            onClick={() => setIsHandGuideOpen(true)}
-          >
-            Hands
-          </Button>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button
@@ -201,6 +255,8 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
               pot={table.pot}
               phase={table.phase}
               label={isShowdown && !table.winningHandLabel ? 'Hand Over' : undefined}
+              blindLabel={formatBlindLevelLabel(table)}
+              blindSubLabel={blindSubLabel}
             />
             <CommunityCards cards={table.communityCards} />
           </div>
@@ -224,6 +280,11 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
                 >
                   <PlayerSeat
                     player={player}
+                    bigBlind={table.config.bigBlind}
+                    showStackInBb={showStackInBb}
+                    onStackDisplayToggle={() =>
+                      setShowStackInBb((current) => !current)
+                    }
                     handLabel={
                       player.isHuman ? humanHandLabel : undefined
                     }
@@ -234,11 +295,6 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
                     isWinner={
                       table.winnerIds.includes(player.id) ||
                       sessionWinner?.id === player.id
-                    }
-                    onSwipeFold={
-                      player.isHuman && player.isActive && humanToCall > 0
-                        ? handleFold
-                        : undefined
                     }
                   />
                 </div>
@@ -270,8 +326,13 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
 
       {!isShowdown && (
         <ActionBar
-          disabled={!humanPlayer?.isActive || (humanPlayer?.chips ?? 0) <= 0}
-          disableFold={humanToCall === 0}
+          disabled={!isHumanTurn}
+          disableFold={
+            isHumanTurn ? humanToCall === 0 : !canQueueFold && !canCancelQueuedFold
+          }
+          foldLabel={queuedFold ? 'Cancel fold' : 'Fold'}
+          bigBlind={table.config.bigBlind}
+          showAmountsInBb={showStackInBb}
           pot={table.pot}
           currentBet={table.currentBet}
           minRaise={table.minRaise}
@@ -283,9 +344,9 @@ export function PokerTable({ gameConfig, onExit }: PokerTableProps) {
         />
       )}
 
-      <HandGuideOverlay
+      <HandGuideDrawer
         open={isHandGuideOpen}
-        onClose={() => setIsHandGuideOpen(false)}
+        onToggle={() => setIsHandGuideOpen((current) => !current)}
         completionOdds={handGuideOdds}
         currentHandLabel={humanHandLabel as HandRankName | undefined}
       />
@@ -429,57 +490,100 @@ function handCards(handId: string, cards: [Rank, Suit][]): Card[] {
   }))
 }
 
-function HandGuideOverlay({
+const HAND_GUIDE_TAB_WIDTH_PX = 40
+const HAND_GUIDE_PANEL_CLASS = 'w-[min(92vw,22rem)] max-w-md'
+
+function HandGuideDrawer({
   open,
-  onClose,
+  onToggle,
   completionOdds,
   currentHandLabel,
 }: {
   open: boolean
-  onClose: () => void
+  onToggle: () => void
   completionOdds?: HandRankCompletionOdds
   currentHandLabel?: HandRankName
 }) {
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/55 px-4 backdrop-blur-sm"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-        >
-          <motion.section
-            className="max-h-[82svh] w-full max-w-md overflow-hidden rounded-2xl border border-gold/25 bg-background/95 shadow-2xl shadow-black/50"
-            initial={{ opacity: 0, y: 24, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.96 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-            onClick={(event) => event.stopPropagation()}
-            aria-label="Poker hand rankings"
-          >
-            <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-gold/80">
-                  Hand Guide
-                </p>
-                <h2 className="text-lg font-black tracking-tight">
-                  Poker Hands
-                </h2>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-9 min-h-9 min-w-9 rounded-full"
-                onClick={onClose}
-                aria-label="Close hand guide"
-              >
-                <X className="size-4" aria-hidden />
-              </Button>
-            </div>
+    <>
+      <AnimatePresence>
+        {open && (
+          <motion.button
+            type="button"
+            className="fixed inset-0 z-40 cursor-default border-0 bg-black/45 p-0 backdrop-blur-[2px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onToggle}
+            aria-label="Close hand guide"
+          />
+        )}
+      </AnimatePresence>
 
-            <div className="max-h-[64svh] space-y-2 overflow-y-auto p-3">
+      <motion.div
+        className="fixed right-0 top-0 z-50 flex h-dvh"
+        initial={false}
+        animate={{
+          x: open ? 0 : `calc(100% - ${HAND_GUIDE_TAB_WIDTH_PX}px)`,
+        }}
+        transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls="hand-guide-panel"
+          className={cn(
+            'flex w-10 shrink-0 flex-col items-center justify-center gap-1.5',
+            'rounded-l-xl border border-r-0 border-gold/35 bg-card/95 shadow-lg shadow-black/40',
+            'text-gold transition-colors hover:bg-gold/10',
+          )}
+          style={{ width: HAND_GUIDE_TAB_WIDTH_PX }}
+        >
+          <ChevronLeft
+            className={cn(
+              'size-4 shrink-0 transition-transform',
+              open && 'rotate-180',
+            )}
+            aria-hidden
+          />
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.22em]"
+            style={{ writingMode: 'vertical-rl' }}
+          >
+            Hands
+          </span>
+        </button>
+
+        <section
+          id="hand-guide-panel"
+          className={cn(
+            HAND_GUIDE_PANEL_CLASS,
+            'flex flex-col overflow-hidden border-l border-gold/25 bg-background/98 shadow-2xl shadow-black/60',
+            !open && 'pointer-events-none invisible',
+          )}
+          aria-hidden={!open}
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-border/70 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-gold/80">
+                Hand Guide
+              </p>
+              <h2 className="text-lg font-black tracking-tight">Poker Hands</h2>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-9 min-h-9 min-w-9 rounded-full"
+              onClick={onToggle}
+              aria-label="Close hand guide"
+            >
+              <X className="size-4" aria-hidden />
+            </Button>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {HAND_RANKINGS.map((hand, index) => {
                 const percent = getHandCompletionDisplayPercent(
                   hand.name,
@@ -528,11 +632,10 @@ function HandGuideOverlay({
                   </div>
                 </div>
               )})}
-            </div>
-          </motion.section>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          </div>
+        </section>
+      </motion.div>
+    </>
   )
 }
 

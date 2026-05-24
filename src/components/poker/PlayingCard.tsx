@@ -18,9 +18,10 @@ interface PlayingCardProps {
   dealFrom?: { x: number; y: number; rotate?: number }
   className?: string
   layoutId?: string
-  draggable?: boolean
+  enableDragReorder?: boolean
+  playDealAnimation?: boolean
   delay?: number
-  onSwipeFold?: () => void
+  onDragReorderEnd?: (info: PanInfo) => void
 }
 
 export function PlayingCard({
@@ -31,40 +32,51 @@ export function PlayingCard({
   dealFrom,
   className,
   layoutId,
-  draggable = false,
+  enableDragReorder = false,
+  playDealAnimation = true,
   delay = 0,
-  onSwipeFold,
+  onDragReorderEnd,
 }: PlayingCardProps) {
   const showFace = !faceDown && card
+  const showDeal = playDealAnimation && Boolean(dealFrom)
   const faceStyle = card
     ? CARD_FACE_BACKGROUND[card.suit]
     : CARD_FACE_BACKGROUND_DEFAULT
 
   return (
     <motion.div
+      layout={enableDragReorder || Boolean(layoutId)}
       layoutId={layoutId}
-      drag={draggable}
-      dragConstraints={{ top: -120, bottom: 40, left: -70, right: 70 }}
-      dragElastic={0.16}
-      whileDrag={{ scale: 1.06, zIndex: 50, rotate: 2 }}
-      onDragEnd={(_, info) => handleDragEnd(info, onSwipeFold)}
-      whileTap={{ scale: 0.97 }}
-      initial={{
-        opacity: 0,
-        x: dealFrom?.x ?? 0,
-        y: dealFrom?.y ?? 24,
-        rotate: dealFrom?.rotate ?? 0,
-        scale: dealFrom ? 0.62 : 1,
-      }}
+      drag={enableDragReorder ? 'x' : false}
+      dragConstraints={{ left: -52, right: 52 }}
+      dragElastic={0.18}
+      dragSnapToOrigin
+      whileDrag={{ scale: 1.05, zIndex: 50 }}
+      onDragEnd={(_, info) => onDragReorderEnd?.(info)}
+      whileTap={enableDragReorder ? { scale: 0.98 } : undefined}
+      initial={
+        showDeal
+          ? {
+              opacity: 0,
+              x: dealFrom?.x ?? 0,
+              y: dealFrom?.y ?? 24,
+              rotate: dealFrom?.rotate ?? 0,
+              scale: 0.62,
+            }
+          : false
+      }
       animate={{ opacity: 1, x: 0, y: 0, rotate: 0, scale: 1 }}
       transition={{
-        type: 'spring',
-        stiffness: dealFrom ? 210 : 260,
-        damping: dealFrom ? 20 : 22,
-        delay,
+        layout: { type: 'spring', stiffness: 480, damping: 34 },
+        opacity: { duration: showDeal ? 0.2 : 0 },
+        x: showDeal ? { type: 'spring', stiffness: 210, damping: 20, delay } : { duration: 0 },
+        y: showDeal ? { type: 'spring', stiffness: 210, damping: 20, delay } : { duration: 0 },
+        rotate: showDeal ? { type: 'spring', stiffness: 210, damping: 20, delay } : { duration: 0 },
+        scale: showDeal ? { type: 'spring', stiffness: 210, damping: 20, delay } : { duration: 0 },
       }}
       className={cn(
-        'relative shrink-0 cursor-grab touch-none active:cursor-grabbing',
+        'relative shrink-0 touch-none',
+        enableDragReorder && 'cursor-grab active:cursor-grabbing',
         size === 'mini'
           ? 'h-9 w-6'
           : 'h-[clamp(3.45rem,13svw,5rem)] w-[clamp(2.45rem,9.4svw,3.5rem)]',
@@ -113,9 +125,13 @@ export function PlayingCard({
                 size === 'mini' ? 'text-[0.72rem]' : 'text-2xl sm:text-3xl',
                 SUIT_COLOR[card.suit],
               )}
-              initial={{ scale: 0.6, opacity: 0 }}
+              initial={showDeal ? { scale: 0.6, opacity: 0 } : false}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: delay + 0.15, type: 'spring', stiffness: 320 }}
+              transition={
+                showDeal
+                  ? { delay: delay + 0.15, type: 'spring', stiffness: 320 }
+                  : { duration: 0 }
+              }
               aria-label={`${card.rank} of ${card.suit}`}
             >
               {card.rank}
@@ -126,9 +142,4 @@ export function PlayingCard({
       </motion.div>
     </motion.div>
   )
-}
-
-function handleDragEnd(info: PanInfo, onSwipeFold?: () => void) {
-  const swipedAway = info.offset.y < -64 || info.velocity.y < -650
-  if (swipedAway) onSwipeFold?.()
 }

@@ -56,11 +56,22 @@ export interface PlayerState {
   handDelta?: number
 }
 
+export interface BlindLevel {
+  smallBlind: number
+  bigBlind: number
+}
+
+export interface BlindStructure {
+  levels: BlindLevel[]
+  advanceEveryHands: number
+}
+
 export interface GameConfig {
   playerCount: number
   startingChips: number
   smallBlind: number
   bigBlind: number
+  blindStructure: BlindStructure
 }
 
 export interface TableState {
@@ -79,4 +90,6 @@ export interface TableState {
   winningHandLabel?: string
   message: string
   config: GameConfig
+  blindLevelIndex: number
+  handsInCurrentLevel: number
 }

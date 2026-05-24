@@ -1,4 +1,6 @@
 import { MAX_PLAYERS } from './constants'
+import { advanceBlindStructureAfterHand } from './blindStructure'
+import { decideBotAction } from './botStrategy'
 import { normalizeGameConfig, type GameConfig } from './gameConfig'
 import type {
   Card,
@@ -11,7 +13,14 @@ import type {
   TableState,
 } from './types'
 
-const AI_NAMES = ['Dealer AI', 'Bot 2', 'Bot 3', 'Bot 4', 'Bot 5', 'Bot 6']
+/** Seat 0 is the human; names map to seats 1..MAX_PLAYERS-1 */
+const CPU_NAMES = [
+  'Marcus',
+  'Elena',
+  'Viktor',
+  'Sofia',
+  'Kenji',
+] as const
 const SUITS: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades']
 const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
 
@@ -36,12 +45,6 @@ const STREET_CARDS: Record<Exclude<GamePhase, 'preflop' | 'showdown'>, number> =
   turn: 1,
   river: 1,
 }
-
-type BotDecision =
-  | { action: 'check' }
-  | { action: 'call' }
-  | { action: 'fold' }
-  | { action: 'betOrRaise'; targetBet: number }
 
 interface SidePot {
   amount: number
@@ -81,6 +84,8 @@ export function createInitialTable(
     winnerIds: [],
     message: '',
     config,
+    blindLevelIndex: 0,
+    handsInCurrentLevel: 0,
   })
 
   return maybeFastForwardToShowdown(table)
@@ -95,6 +100,7 @@ export function getPlayerHandLabel(
 }
 
 export function startNextHand(table: TableState): TableState {
+  const blindAdvance = advanceBlindStructureAfterHand(table)
   const remainingPlayers = reindexPlayersForNextHand(table.players)
   const count = remainingPlayers.length
   const dealerSeatIndex = getNextDealerSeatIndex(
@@ -106,7 +112,7 @@ export function startNextHand(table: TableState): TableState {
   const players = resetPlayersForNextHand(
     remainingPlayers,
     dealerSeatIndex,
-    table.config,
+    blindAdvance.config,
   )
 
   dealHoleCards(players, deck, nextSeat(dealerSeatIndex, count))
@@ -119,7 +125,7 @@ export function startNextHand(table: TableState): TableState {
     phase: 'preflop',
     pot: 0,
     currentBet: Math.max(0, ...players.map((player) => player.bet)),
-    minRaise: table.config.bigBlind,
+    minRaise: blindAdvance.config.bigBlind,
     communityCards: [],
     players,
     deck,
@@ -128,8 +134,10 @@ export function startNextHand(table: TableState): TableState {
     checkedSeatIndexes: [],
     actionLog: [],
     winnerIds: [],
-    message: '',
-    config: table.config,
+    message: blindAdvance.levelUpMessage ?? '',
+    config: blindAdvance.config,
+    blindLevelIndex: blindAdvance.blindLevelIndex,
+    handsInCurrentLevel: blindAdvance.handsInCurrentLevel,
   })
 
   return maybeFastForwardToShowdown(nextTable)
@@ -644,7 +652,7 @@ function createPlayers(
     return {
       id: `player-${seatIndex}`,
       seatIndex,
-      name: isHuman ? 'You' : AI_NAMES[seatIndex] ?? `Player ${seatIndex + 1}`,
+      name: isHuman ? 'You' : CPU_NAMES[seatIndex - 1] ?? `Guest ${seatIndex}`,
       chips: config.startingChips - bet,
       bet,
       committed: bet,
@@ -1135,130 +1143,6 @@ function getMinimumTargetBet(table: TableState, player: PlayerState) {
     player.bet + player.chips,
     table.currentBet + table.minRaise,
   )
-}
-
-function shouldBotCall(table: TableState, player: PlayerState) {
-  const toCall = amountToCall(table, player)
-  if (toCall <= 0) return true
-  if (toCall >= player.chips) return Math.random() < 0.35
-
-  const pressure = toCall / Math.max(1, table.pot)
-  const handStrength =
-    table.phase === 'preflop'
-      ? estimatePreflopStrength(player.holeCards)
-      : evaluateBestHand([...player.holeCards, ...table.communityCards]).score[0] /
-        8
-
-  const callChance = clamp(0.25 + handStrength * 0.75 - pressure, 0.08, 0.92)
-  return Math.random() < callChance
-}
-
-function decideBotAction(table: TableState, player: PlayerState): BotDecision {
-  const toCall = amountToCall(table, player)
-  const strength = estimateBotStrength(table, player)
-  const potPressure = toCall / Math.max(1, table.pot)
-  const stackPressure = toCall / Math.max(1, player.chips)
-  const aggression = 0.08 + strength * 0.34
-
-  if (toCall > 0) {
-    const canRaise = player.chips > toCall + table.minRaise
-    const raiseChance = clamp(
-      strength * 0.42 - potPressure * 0.25 - stackPressure * 0.25,
-      0,
-      0.32,
-    )
-
-    if (canRaise && strength > 0.68 && Math.random() < raiseChance) {
-      return {
-        action: 'betOrRaise',
-        targetBet: botRaiseTarget(table, player, strength),
-      }
-    }
-
-    return shouldBotCall(table, player)
-      ? { action: 'call' }
-      : { action: 'fold' }
-  }
-
-  const canBet = player.chips >= table.config.bigBlind
-  const bluffChance = table.phase === 'river' ? 0.03 : 0.06
-  const betChance = clamp(aggression + bluffChance, 0.03, 0.42)
-
-  if (canBet && Math.random() < betChance) {
-    return {
-      action: 'betOrRaise',
-      targetBet: botOpenBetTarget(table, player, strength),
-    }
-  }
-
-  return { action: 'check' }
-}
-
-function estimateBotStrength(table: TableState, player: PlayerState) {
-  if (table.phase === 'preflop') {
-    return estimatePreflopStrength(player.holeCards)
-  }
-
-  const madeHandStrength =
-    evaluateBestHand([...player.holeCards, ...table.communityCards]).score[0] / 8
-  const highCardStrength =
-    Math.max(...player.holeCards.map((card) => RANK_VALUE[card.rank])) / 14
-  const drawBonus = estimateDrawPotential([...player.holeCards, ...table.communityCards])
-
-  return clamp(madeHandStrength * 0.72 + highCardStrength * 0.18 + drawBonus, 0, 1)
-}
-
-function botOpenBetTarget(
-  table: TableState,
-  player: PlayerState,
-  strength: number,
-) {
-  const percent = strength > 0.75 ? 0.75 : strength > 0.55 ? 0.5 : 0.33
-  const target = Math.max(table.config.bigBlind, Math.round(table.pot * percent))
-  return Math.min(player.bet + player.chips, target)
-}
-
-function botRaiseTarget(
-  table: TableState,
-  player: PlayerState,
-  strength: number,
-) {
-  const multiplier = strength > 0.82 ? 3 : 2
-  const target = Math.max(
-    table.currentBet + table.minRaise,
-    Math.round(table.currentBet * multiplier),
-  )
-  return Math.min(player.bet + player.chips, target)
-}
-
-function estimateDrawPotential(cards: Card[]) {
-  const bySuit = groupCardsBySuit(cards)
-  const hasFlushDraw = Object.values(bySuit).some((suitedCards) => suitedCards.length >= 4)
-  const values = uniqueDesc(cards.map((card) => RANK_VALUE[card.rank]))
-  const normalized = values.includes(14) ? [...values, 1] : values
-  const hasOpenEndedDraw = normalized.some((value) => {
-    const run = [value, value - 1, value - 2, value - 3]
-    return run.every((candidate) => normalized.includes(candidate))
-  })
-
-  return (hasFlushDraw ? 0.12 : 0) + (hasOpenEndedDraw ? 0.1 : 0)
-}
-
-function estimatePreflopStrength(cards: Card[]) {
-  if (cards.length < 2) return 0
-
-  const [a, b] = cards
-  const high = Math.max(RANK_VALUE[a.rank], RANK_VALUE[b.rank])
-  const low = Math.min(RANK_VALUE[a.rank], RANK_VALUE[b.rank])
-  const isPair = a.rank === b.rank
-  const isSuited = a.suit === b.suit
-  const connected = Math.abs(RANK_VALUE[a.rank] - RANK_VALUE[b.rank]) <= 1
-
-  let score = (high + low) / 28
-  if (isPair) score += 0.35
-  if (isSuited) score += 0.08
-  if (connected) score += 0.06
-  return clamp(score, 0, 1)
 }
 
 function clamp(value: number, min: number, max: number) {

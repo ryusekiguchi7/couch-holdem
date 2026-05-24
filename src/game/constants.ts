@@ -65,8 +65,12 @@ export const CARD_BACKGROUND = {
 } as const
 
 export const MAX_PLAYERS = 6
+export const MIN_PLAYERS = 2
 /** 2〜6。レイアウト確認時は 6 に変更可 */
 export const DEFAULT_PLAYER_COUNT = 6
-export const STARTING_CHIPS = 50
-export const SMALL_BLIND = 0.5
-export const BIG_BLIND = 1
+export const SMALL_BLIND = 1
+export const BIG_BLIND = 2
+export const STACK_BB_OPTIONS = [50, 100, 150, 200] as const
+export type StackBbOption = (typeof STACK_BB_OPTIONS)[number]
+export const DEFAULT_STACK_BB: StackBbOption = 100
+export const STARTING_CHIPS = DEFAULT_STACK_BB * BIG_BLIND

@@ -4,16 +4,49 @@ import { Spade } from 'lucide-react'
 
 import { PokerTable } from '@/components/poker/PokerTable'
 import { Button } from '@/components/ui/button'
-import { MAX_PLAYERS } from '@/game/constants'
 import {
-  DEFAULT_GAME_CONFIG,
+  BIG_BLIND,
+  DEFAULT_PLAYER_COUNT,
+  DEFAULT_STACK_BB,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  SMALL_BLIND,
+  STACK_BB_OPTIONS,
+  type StackBbOption,
+} from '@/game/constants'
+import {
   normalizeGameConfig,
+  startingChipsFromStackBb,
   type GameConfig,
 } from '@/game/gameConfig'
 
+const PLAYER_COUNT_OPTIONS = Array.from(
+  { length: MAX_PLAYERS - MIN_PLAYERS + 1 },
+  (_, index) => MIN_PLAYERS + index,
+)
+
+interface SetupDraft {
+  playerCount: number
+  startingStackBb: StackBbOption
+}
+
+const DEFAULT_SETUP: SetupDraft = {
+  playerCount: DEFAULT_PLAYER_COUNT,
+  startingStackBb: DEFAULT_STACK_BB,
+}
+
+function setupToGameConfig(draft: SetupDraft): GameConfig {
+  return normalizeGameConfig({
+    playerCount: draft.playerCount,
+    startingChips: startingChipsFromStackBb(draft.startingStackBb),
+    smallBlind: SMALL_BLIND,
+    bigBlind: BIG_BLIND,
+  })
+}
+
 function App() {
   const [gameConfig, setGameConfig] = useState<GameConfig | null>(null)
-  const [draft, setDraft] = useState<GameConfig>(DEFAULT_GAME_CONFIG)
+  const [draft, setDraft] = useState<SetupDraft>(DEFAULT_SETUP)
 
   if (gameConfig) {
     return (
@@ -54,19 +87,13 @@ function App() {
           <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
             Couch Hold&apos;em
           </h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            人数・スタック・ブラインドを決めてから開始
-          </p>
 
           <div className="mt-6 w-full space-y-3 rounded-2xl border border-border/70 bg-card/85 p-4 text-left shadow-xl shadow-black/30">
             <label className="block space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                Players ({2}–{MAX_PLAYERS})
+                Players
               </span>
-              <input
-                type="number"
-                min={2}
-                max={MAX_PLAYERS}
+              <select
                 value={draft.playerCount}
                 onChange={(event) =>
                   setDraft((current) => ({
@@ -75,72 +102,42 @@ function App() {
                   }))
                 }
                 className="h-10 w-full rounded-md border border-border bg-input px-3 text-sm font-semibold tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring/50"
-              />
+              >
+                {PLAYER_COUNT_OPTIONS.map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="block space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 Starting Stack
               </span>
-              <input
-                type="number"
-                min={1}
-                value={draft.startingChips}
+              <select
+                value={draft.startingStackBb}
                 onChange={(event) =>
                   setDraft((current) => ({
                     ...current,
-                    startingChips: Number(event.target.value),
+                    startingStackBb: Number(event.target.value) as StackBbOption,
                   }))
                 }
                 className="h-10 w-full rounded-md border border-border bg-input px-3 text-sm font-semibold tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring/50"
-              />
+              >
+                {STACK_BB_OPTIONS.map((bb) => (
+                  <option key={bb} value={bb}>
+                    {bb} BB ({startingChipsFromStackBb(bb).toLocaleString()})
+                  </option>
+                ))}
+              </select>
             </label>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Small Blind
-                </span>
-                <input
-                  type="number"
-                  min={0.5}
-                  step={0.5}
-                  value={draft.smallBlind}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      smallBlind: Number(event.target.value),
-                    }))
-                  }
-                  className="h-10 w-full rounded-md border border-border bg-input px-3 text-sm font-semibold tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring/50"
-                />
-              </label>
-
-              <label className="block space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Big Blind
-                </span>
-                <input
-                  type="number"
-                  min={draft.smallBlind}
-                  step={0.5}
-                  value={draft.bigBlind}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      bigBlind: Number(event.target.value),
-                    }))
-                  }
-                  className="h-10 w-full rounded-md border border-border bg-input px-3 text-sm font-semibold tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring/50"
-                />
-              </label>
-            </div>
           </div>
 
           <Button
             className="mt-6 h-12 rounded-full px-8 text-sm font-bold uppercase tracking-[0.2em] shadow-lg shadow-black/30"
             variant="casino"
-            onClick={() => setGameConfig(normalizeGameConfig(draft))}
+            onClick={() => setGameConfig(setupToGameConfig(draft))}
           >
             Shuffle Up and Deal
           </Button>

@@ -1,31 +1,62 @@
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, type PanInfo, motion } from 'framer-motion'
 import { Coins } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import type { PlayerState } from '@/game/types'
+import { formatChipAmount } from '@/lib/chipFormat'
 import { cn } from '@/lib/utils'
 
 import { PlayingCard } from './PlayingCard'
 
+const CARD_SWAP_DRAG_THRESHOLD = 28
+
 interface PlayerSeatProps {
   player: PlayerState
+  bigBlind: number
+  showStackInBb: boolean
+  onStackDisplayToggle: () => void
   showCards?: boolean
   handLabel?: string
   isWinner?: boolean
-  onSwipeFold?: () => void
 }
 
 export function PlayerSeat({
   player,
+  bigBlind,
+  showStackInBb,
+  onStackDisplayToggle,
   showCards = false,
   handLabel,
   isWinner = false,
-  onSwipeFold,
 }: PlayerSeatProps) {
   const revealCards = showCards || player.isHuman
-  const actionText = getActionText(player)
-  const canSwipeFold = Boolean(player.isHuman && player.isActive && !player.hasFolded)
+  const actionText = getActionText(player, bigBlind, showStackInBb)
   const showHand = !player.hasFolded
+  const canReorderCards =
+    player.isHuman && revealCards && player.holeCards.length === 2 && showHand
+  const [holeCardOrder, setHoleCardOrder] = useState([0, 1])
+  const holeHandKey = `${player.holeCards[0]?.id ?? ''}:${player.holeCards[1]?.id ?? ''}`
+  const dealtHandKeyRef = useRef('')
+  const playHoleCardDeal =
+    holeHandKey !== '' && dealtHandKeyRef.current !== holeHandKey
+
+  useEffect(() => {
+    setHoleCardOrder([0, 1])
+    if (holeHandKey) {
+      dealtHandKeyRef.current = holeHandKey
+    }
+  }, [holeHandKey])
+
+  function handleCardDragEnd(displayIndex: 0 | 1, info: PanInfo) {
+    const draggedPastSibling =
+      (displayIndex === 0 && info.offset.x > CARD_SWAP_DRAG_THRESHOLD) ||
+      (displayIndex === 1 && info.offset.x < -CARD_SWAP_DRAG_THRESHOLD)
+
+    if (draggedPastSibling) {
+      setHoleCardOrder(([left, right]) => [right, left])
+    }
+  }
 
   return (
     <motion.div
@@ -42,12 +73,6 @@ export function PlayerSeat({
         {showHand && (
           <motion.div
             className="order-2 flex min-w-0 shrink-0 flex-row gap-0.5 sm:gap-1"
-            drag={canSwipeFold}
-            dragConstraints={{ top: -120, bottom: 40, left: -70, right: 70 }}
-            dragElastic={0.16}
-            dragSnapToOrigin
-            whileDrag={{ scale: 1.06, zIndex: 50, rotate: 2 }}
-            onDragEnd={(_, info) => handleSwipeFold(info, onSwipeFold)}
             animate={{ x: 0, y: 0, opacity: 1, rotate: 0, scale: 1 }}
             exit={{
               x: getFoldDiscardMotion(player.seatIndex).x,
@@ -59,20 +84,37 @@ export function PlayerSeat({
             transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
           >
             {player.holeCards.length > 0 ? (
-              player.holeCards.map((card, i) => (
-                <PlayingCard
-                  key={card.id}
-                  card={card}
-                  faceDown={!revealCards}
-                  dealFrom={getDealMotion(player.seatIndex, i)}
-                  delay={player.seatIndex * 0.06 + i * 0.1}
-                  layoutId={card.id}
-                />
-              ))
+              holeCardOrder.map((cardIndex, displayIndex) => {
+                const card = player.holeCards[cardIndex]
+                if (!card) return null
+
+                return (
+                  <PlayingCard
+                    key={card.id}
+                    card={card}
+                    faceDown={!revealCards}
+                    dealFrom={getDealMotion(player.seatIndex, cardIndex)}
+                    delay={player.seatIndex * 0.06 + cardIndex * 0.1}
+                    playDealAnimation={playHoleCardDeal}
+                    enableDragReorder={canReorderCards}
+                    onDragReorderEnd={(info) =>
+                      handleCardDragEnd(displayIndex as 0 | 1, info)
+                    }
+                  />
+                )
+              })
             ) : (
               <>
-              <PlayingCard faceDown dealFrom={getDealMotion(player.seatIndex, 0)} delay={0} />
-              <PlayingCard faceDown dealFrom={getDealMotion(player.seatIndex, 1)} delay={0.08} />
+                <PlayingCard
+                  faceDown
+                  dealFrom={getDealMotion(player.seatIndex, 0)}
+                  delay={0}
+                />
+                <PlayingCard
+                  faceDown
+                  dealFrom={getDealMotion(player.seatIndex, 1)}
+                  delay={0.08}
+                />
               </>
             )}
           </motion.div>
@@ -95,7 +137,9 @@ export function PlayerSeat({
           <span className="inline-flex items-center justify-center gap-1">
             <span>{player.lastAction}</span>
             <Coins className="size-3" aria-hidden />
-            <span className="tabular-nums">{player.actionAmount}</span>
+            <span className="tabular-nums">
+              {formatChipAmount(player.actionAmount, bigBlind, showStackInBb)}
+            </span>
           </span>
         ) : (
           actionText
@@ -137,17 +181,29 @@ export function PlayerSeat({
           )}
         </div>
 
-        <div className="flex items-center gap-1 rounded-full border border-border/60 bg-black/25 px-1.5 py-0.5 text-[9px] backdrop-blur-sm sm:px-2 sm:text-[11px]">
+        <button
+          type="button"
+          onClick={onStackDisplayToggle}
+          aria-pressed={showStackInBb}
+          aria-label={
+            showStackInBb
+              ? `Stack ${formatChipAmount(player.chips, bigBlind, true)}, show chips`
+              : `Stack ${player.chips.toLocaleString()} chips, show big blinds`
+          }
+          className="flex cursor-pointer items-center gap-1 rounded-full border border-border/60 bg-black/25 px-1.5 py-0.5 text-[9px] backdrop-blur-sm transition-colors hover:border-gold/40 hover:bg-black/40 sm:px-2 sm:text-[11px]"
+        >
           <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">
-            Stack
+            {showStackInBb ? 'BB' : 'Stack'}
           </span>
           <span className="font-semibold tabular-nums text-foreground">
-            {player.chips.toLocaleString()}
+            {formatChipAmount(player.chips, bigBlind, showStackInBb)}
           </span>
           {typeof player.handDelta === 'number' && player.handDelta > 0 && (
-            <span className="text-gold">+{player.handDelta}</span>
+            <span className="text-gold">
+              +{formatChipAmount(player.handDelta, bigBlind, showStackInBb)}
+            </span>
           )}
-        </div>
+        </button>
 
         {handLabel && !player.hasFolded && (
           <p className="max-w-full truncate text-center text-[9px] font-medium text-emerald-300/90 sm:text-[10px]">
@@ -177,19 +233,18 @@ function getActionDisplayClass(lastAction: string) {
   return 'border-muted/60 bg-muted/40 text-muted-foreground'
 }
 
-function getActionText(player: PlayerState) {
+function getActionText(
+  player: PlayerState,
+  bigBlind: number,
+  showStackInBb: boolean,
+) {
   if (player.lastAction) {
     return typeof player.actionAmount === 'number'
-      ? `${player.lastAction} ${player.actionAmount}`
+      ? `${player.lastAction} ${formatChipAmount(player.actionAmount, bigBlind, showStackInBb)}`
       : player.lastAction
   }
 
   return player.isActive ? 'To Act' : ''
-}
-
-function handleSwipeFold(info: PanInfo, onSwipeFold?: () => void) {
-  const swipedAway = info.offset.y < -64 || info.velocity.y < -650
-  if (swipedAway) onSwipeFold?.()
 }
 
 function getFoldDiscardMotion(seatIndex: number) {

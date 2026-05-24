@@ -2,10 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 
 import { Button } from '@/components/ui/button'
+import {
+  chipsToBb,
+  formatChipAmount,
+  formatChipAmountForInput,
+  parseChipAmountInput,
+} from '@/lib/chipFormat'
 
 interface ActionBarProps {
   disabled?: boolean
   disableFold?: boolean
+  foldLabel?: string
+  bigBlind: number
+  showAmountsInBb: boolean
   pot: number
   currentBet: number
   minRaise: number
@@ -19,6 +28,9 @@ interface ActionBarProps {
 export function ActionBar({
   disabled = false,
   disableFold = false,
+  foldLabel = 'Fold',
+  bigBlind,
+  showAmountsInBb,
   pot,
   currentBet,
   minRaise,
@@ -36,16 +48,24 @@ export function ActionBar({
     if (isRaise) return Math.min(maxTarget, currentBet + minRaise)
     return Math.min(maxTarget, Math.max(minRaise, 1))
   }, [currentBet, isRaise, maxTarget, minRaise])
-  const [amount, setAmount] = useState(String(minimumTarget))
+  const [amount, setAmount] = useState(() =>
+    formatChipAmountForInput(minimumTarget, bigBlind, showAmountsInBb),
+  )
 
   useEffect(() => {
-    setAmount(String(minimumTarget))
-  }, [minimumTarget])
+    setAmount(formatChipAmountForInput(minimumTarget, bigBlind, showAmountsInBb))
+  }, [bigBlind, minimumTarget, showAmountsInBb])
 
-  const parsedAmount = Number(amount)
-  const submittedTarget = Number.isFinite(parsedAmount)
-    ? Math.min(maxTarget, Math.max(minimumTarget, Math.floor(parsedAmount)))
+  const inputMin = showAmountsInBb
+    ? chipsToBb(minimumTarget, bigBlind)
     : minimumTarget
+  const inputMax = showAmountsInBb ? chipsToBb(maxTarget, bigBlind) : maxTarget
+
+  const parsedChips = parseChipAmountInput(amount, bigBlind, showAmountsInBb)
+  const submittedTarget =
+    parsedChips !== null
+      ? Math.min(maxTarget, Math.max(minimumTarget, Math.floor(parsedChips)))
+      : minimumTarget
 
   function submit(targetBet = submittedTarget) {
     if (!canBetOrRaise) return
@@ -53,7 +73,7 @@ export function ActionBar({
   }
 
   function previewTarget(targetBet: number) {
-    setAmount(String(targetBet))
+    setAmount(formatChipAmountForInput(targetBet, bigBlind, showAmountsInBb))
   }
 
   function potTarget(percent: number) {
@@ -63,6 +83,11 @@ export function ActionBar({
   function raiseTarget(multiplier: number) {
     return Math.min(maxTarget, Math.max(minimumTarget, Math.round(currentBet * multiplier)))
   }
+
+  const callLabel =
+    toCall > 0
+      ? `Call ${formatChipAmount(toCall, bigBlind, showAmountsInBb)}`
+      : 'Check'
 
   return (
     <motion.div
@@ -83,13 +108,22 @@ export function ActionBar({
         </Button>
         <input
           type="number"
-          min={minimumTarget}
-          max={maxTarget}
+          min={inputMin}
+          max={inputMax}
+          step={showAmountsInBb ? 0.1 : 1}
           value={amount}
           disabled={!canBetOrRaise}
           onChange={(event) => setAmount(event.target.value)}
           className="h-10 min-w-0 rounded-md border border-border bg-input px-3 text-center text-sm font-semibold tabular-nums text-red-300 outline-none focus:ring-2 focus:ring-ring/50 disabled:opacity-50"
-          aria-label={isRaise ? 'Raise amount' : 'Bet amount'}
+          aria-label={
+            showAmountsInBb
+              ? isRaise
+                ? 'Raise amount in big blinds'
+                : 'Bet amount in big blinds'
+              : isRaise
+                ? 'Raise amount'
+                : 'Bet amount'
+          }
         />
       </div>
 
@@ -147,11 +181,11 @@ export function ActionBar({
         <Button
           variant="outline"
           size="lg"
-          disabled={disabled || disableFold}
+          disabled={disableFold}
           onClick={onFold}
           className="h-10 min-h-10 border-blue-500/50 text-blue-300 hover:bg-blue-500/15 hover:text-blue-200"
         >
-          Fold
+          {foldLabel}
         </Button>
         <Button
           variant="outline"
@@ -160,7 +194,7 @@ export function ActionBar({
           onClick={onCheck}
           className="h-10 min-h-10 border-green-500/50 bg-green-500/15 text-green-300 hover:bg-green-500/25 hover:text-green-200"
         >
-          {toCall > 0 ? `Call ${toCall}` : 'Check'}
+          {callLabel}
         </Button>
       </div>
     </motion.div>
